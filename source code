@@ -1,1 +1,104 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+sem_t wrt;
+pthread_mutex_t mutex;
+int readCount = 0;
+int tickets = 0; // total tickets will be set by user
+
+void* reader(void* arg) {
+    int id = *(int*)arg;
+
+    pthread_mutex_lock(&mutex);
+    readCount++;
+    if (readCount == 1)
+        sem_wait(&wrt);
+    pthread_mutex_unlock(&mutex);
+
+    printf("\n[Reader %d] Checking tickets... Available Tickets = %d\n", id, tickets);
+    sleep(1);
+
+    pthread_mutex_lock(&mutex);
+    readCount--;
+    if (readCount == 0)
+        sem_post(&wrt);
+    pthread_mutex_unlock(&mutex);
+
+    return NULL;
+}
+
+void* writer(void* arg) {
+    int* data = (int*)arg;
+    int id = data[0];
+    int bookCount = data[1];
+
+    sem_wait(&wrt);
+    if (tickets >= bookCount) {
+        printf("\n[Writer %d] Booking %d ticket(s)...\n", id, bookCount);
+        sleep(1);
+        tickets -= bookCount;
+        printf("[Writer %d] Booking successful! Remaining = %d\n", id, tickets);
+    } else if (tickets > 0) {
+        printf("\n[Writer %d] Only %d ticket(s) left! Cannot book %d.\n", id, tickets, bookCount);
+    } else {
+        printf("\n[Writer %d] No tickets left to book!\n", id);
+    }
+    sem_post(&wrt);
+
+    return NULL;
+}
+
+int main() {
+    pthread_t tid;
+    int choice, userId = 1;
+
+    // Initialize synchronization primitives
+    sem_init(&wrt, 0, 1);
+    pthread_mutex_init(&mutex, NULL);
+
+    printf("===== E-TICKET BOOKING SYSTEM =====\n");
+    printf("Simulating Reader-Writer Problem using Threads & Semaphores\n\n");
+
+    // Set total tickets at the start
+    printf("Enter total number of tickets available: ");
+    scanf("%d", &tickets);
+
+    while (1) {
+        printf("\nMenu:\n");
+        printf("1. View available tickets (Reader)\n");
+        printf("2. Book ticket(s) (Writer)\n");
+        printf("3. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        if (choice == 1) {
+            pthread_create(&tid, NULL, reader, &userId);
+            pthread_join(tid, NULL);
+            userId++;
+        } 
+        else if (choice == 2) {
+            int data[2];
+            data[0] = userId;
+            printf("Enter number of tickets to book: ");
+            scanf("%d", &data[1]);
+            pthread_create(&tid, NULL, writer, (void*)data);
+            pthread_join(tid, NULL);
+            userId++;
+        } 
+        else if (choice == 3) {
+            printf("\nExiting the system... Thank you!\n");
+            break;
+        } 
+        else {
+            printf("\nInvalid choice! Try again.\n");
+        }
+    }
+
+    sem_destroy(&wrt);
+    pthread_mutex_destroy(&mutex);
+    return 0;
+}
 
